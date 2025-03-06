@@ -56,5 +56,3 @@ out/
 ehthumbs.db
 Thumbs.db
 
-# Ignore typescript-ink sample repository
-log/samples/typescript-ink/

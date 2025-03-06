@@ -1,0 +1,47 @@
+{
+  "projectName": "Lernix",
+  "projectDescription": "ターミナルベース(TUI)の学習システム。LLMを活用した個別最適化学習ツール。",
+  "filePatterns": {
+    "markdown": [
+      "**/*.md"
+    ],
+    "json": [
+      "**/*.json"
+    ],
+    "typescript": [
+      "**/*.ts",
+      "**/*.tsx"
+    ],
+    "javascript": [
+      "**/*.js",
+      "**/*.jsx"
+    ]
+  },
+  "ignore": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/.git/**"
+  ],
+  "contextProviders": {
+    "documentation": [
+      "Lernix_設計概要書.md",
+      "README.md"
+    ],
+    "coreModules": [
+      "src/**/*"
+    ]
+  },
+  "aiSettings": {
+    "language": "ja",
+    "preferredModules": [
+      "openai",
+      "anthropic"
+    ],
+    "projectStructureHints": [
+      "ターミナルUI (TUI) アプリケーション",
+      "LLM連携でAIを活用した学習システム",
+      "データ永続化機能を含む"
+    ]
+  }
+}

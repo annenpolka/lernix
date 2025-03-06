@@ -1,0 +1,138 @@
+{
+  "typescript": {
+    "ink": {
+      "repository": "https://github.com/vadimdemedes/ink",
+      "stars": 26000,
+      "description": "ReactをターミナルUI向けに適用したフレームワーク",
+      "lastUpdate": "2025-02",
+      "license": "MIT",
+      "features": ["Reactパラダイム", "コンポーネントベース", "JSX対応", "ステート管理"],
+      "notes": "GitHubやCloudflareなど多くの企業が採用"
+    },
+    "blessed": {
+      "repository": "https://github.com/chjj/blessed",
+      "stars": 13000,
+      "description": "高機能なカーソルポジショニング、スクリーン描画、キーボード入力などを備えたライブラリ",
+      "lastUpdate": "2024-03",
+      "license": "MIT",
+      "features": ["豊富なウィジェット", "イベント駆動", "高度なレイアウト管理"],
+      "notes": "長い歴史があり安定しているが、TypeScript定義の品質に課題"
+    },
+    "cli-ui": {
+      "repository": "https://github.com/cliui/cliui",
+      "stars": 6000,
+      "description": "CLIアプリケーション向けの簡易的なUI構築ライブラリ",
+      "lastUpdate": "2024-06",
+      "license": "ISC",
+      "features": ["シンプルなAPI", "自動レイアウト", "ANSIカラー対応"],
+      "notes": "大規模UIには適さないが、シンプルなインターフェースに最適"
+    }
+  },
+  "rust": {
+    "ratatui": {
+      "repository": "https://github.com/ratatui-org/ratatui",
+      "stars": 10000,
+      "description": "RustのためのFlexboxライクなレイアウトを持つTUIフレームワーク",
+      "lastUpdate": "2025-03",
+      "license": "MIT",
+      "features": ["クロスターム対応", "レスポンシブレイアウト", "豊富なウィジェット"],
+      "notes": "活発なコミュニティがあり、継続的に改善されている"
+    },
+    "tui-realm": {
+      "repository": "https://github.com/veeso/tui-realm",
+      "stars": 700,
+      "description": "Ratataui上に構築されたReact/Elmライクなアプローチのフレームワーク",
+      "lastUpdate": "2024-11",
+      "license": "MIT",
+      "features": ["状態管理", "コンポーネントライフサイクル", "イベント処理"],
+      "notes": "アーキテクチャ設計が優れているが、ドキュメントがやや不足"
+    },
+    "cursive": {
+      "repository": "https://github.com/gyscos/cursive",
+      "stars": 4000,
+      "description": "ncurses風のイベント駆動型TUIライブラリ",
+      "lastUpdate": "2024-10",
+      "license": "MIT",
+      "features": ["ビューベース", "イベント駆動", "マルチバックエンド"],
+      "notes": "伝統的なTUIアプローチで、安定した使用感"
+    }
+  },
+  "go": {
+    "bubbletea": {
+      "repository": "https://github.com/charmbracelet/bubbletea",
+      "stars": 22000,
+      "description": "Elm Architectureに基づいた関数型アプローチのTUIフレームワーク",
+      "lastUpdate": "2025-03",
+      "license": "MIT",
+      "features": ["状態管理", "イベント処理", "コンポーネントモデル"],
+      "notes": "Bubblesという追加コンポーネントライブラリが充実"
+    },
+    "termui": {
+      "repository": "https://github.com/gizak/termui",
+      "stars": 12000,
+      "description": "グラフやチャートに強いGoのTUIライブラリ",
+      "lastUpdate": "2024-05",
+      "license": "MIT",
+      "features": ["グラフ表示", "データ可視化", "イベントハンドリング"],
+      "notes": "データ分析系アプリケーションに特に適している"
+    },
+    "tview": {
+      "repository": "https://github.com/rivo/tview",
+      "stars": 9000,
+      "description": "リッチテキストとフレキシブルなレイアウトを備えたTUIライブラリ",
+      "lastUpdate": "2024-12",
+      "license": "MIT",
+      "features": ["フォーム", "テーブル", "フレックスボックスレイアウト"],
+      "notes": "テキスト重視のアプリケーションに特に適している"
+    }
+  },
+  "others": {
+    "cpp_ftxui": {
+      "repository": "https://github.com/ArthurSonzogni/FTXUI",
+      "stars": 5000,
+      "description": "C++向けの現代的なTUIライブラリ",
+      "lastUpdate": "2025-01",
+      "license": "MIT",
+      "features": ["モダンC++", "アニメーション", "レスポンシブレイアウト"],
+      "notes": "C++17以上をサポート、Flexboxライクなレイアウト"
+    },
+    "cpp_ncurses": {
+      "repository": "https://invisible-island.net/ncurses/",
+      "stars": "N/A",
+      "description": "伝統的なターミナル制御ライブラリ",
+      "lastUpdate": "継続的",
+      "license": "MIT-like",
+      "features": ["低レベル制御", "広範な互換性", "安定性"],
+      "notes": "多くのTUIライブラリの基盤となっている"
+    },
+    "haskell_brick": {
+      "repository": "https://github.com/jtdaugherty/brick",
+      "stars": 4000,
+      "description": "宣言的レイアウトを持つHaskell TUIライブラリ",
+      "lastUpdate": "2024-09",
+      "license": "BSD-3",
+      "features": ["宣言的UI", "強力な型システム", "カスタマイズ性"],
+      "notes": "関数型プログラミングパラダイムを活かした設計"
+    },
+    "kotlin_mordant": {
+      "repository": "https://github.com/ajalt/mordant",
+      "stars": 1500,
+      "description": "KotlinのモダンなコンソールTUIライブラリ",
+      "lastUpdate": "2024-08",
+      "license": "Apache-2.0",
+      "features": ["リッチテキスト", "テーブル表示", "プログレスバー"],
+      "notes": "JVMベースで複数プラットフォーム対応"
+    }
+  },
+  "python_reference": {
+    "textual": {
+      "repository": "https://github.com/textualize/textual",
+      "stars": 21000,
+      "description": "Pythonの高機能TUIフレームワーク（型ヒント対応）",
+      "lastUpdate": "2025-03",
+      "license": "MIT",
+      "features": ["CSSライクスタイリング", "リッチウィジェット", "レスポンシブデザイン"],
+      "notes": "Pythonライブラリだが、型ヒントが充実していて静的解析可能"
+    }
+  }
+}

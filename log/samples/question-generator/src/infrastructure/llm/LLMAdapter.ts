@@ -42,12 +42,16 @@ export const createOpenAIAdapter = (config: OpenAIAdapterConfig): LLMAdapter => 
 
   // プロンプトの生成関数
   const buildPrompt = (params: PromptParams): string => {
-    const { category, difficulty, count, excludeIds, additionalInstructions } = params;
+    const { category, difficulty, count, excludeIds, additionalInstructions, language } = params;
+
+    // デフォルト言語は日本語
+    const promptLanguage = language || 'ja';
 
     let prompt = `
-以下の条件に合致する問題を${count}問生成してください:
+${promptLanguage === 'ja' ? `以下の条件に合致する問題を${count}問生成してください:` : `Generate ${count} questions matching the following criteria:`}
 - カテゴリ: ${category}
 - 難易度: ${difficulty}
+- language: ${promptLanguage}
 - 形式: 4択問題
 - 各問題には正解の選択肢を含めてください
 - 各問題には説明文を含めてください
@@ -99,14 +103,25 @@ JSONスキーマ:
         body: JSON.stringify({
           model: config.model,
           messages: [
-            { role: 'system', content: '教育問題を生成するAIアシスタントです。JSON形式で出力します。' },
+            {
+              role: 'system',
+              content: params.language === 'en'
+                ? 'You are an AI assistant that generates educational questions in English. Output in JSON format.'
+                : params.language && params.language !== 'ja'
+                  ? `You are an AI assistant that generates educational questions in ${params.language}. Output in JSON format.`
+                  : '教育問題を生成するAIアシスタントです。JSON形式で出力します。'
+            },
             { role: 'user', content: prompt }
-          ],
-          temperature: 0.7,
+          ]
+          // Note: temperatureパラメータは一部のモデル（特にo3系）ではサポートされていません
         })
       });
 
       if (!response.ok) {
+        // エラーの詳細ログを出力
+        const errorText = await response.text();
+        console.error(`APIエラー詳細: ${errorText}`);
+
         return {
           success: false,
           error: `APIエラー: ${response.status} ${response.statusText}`

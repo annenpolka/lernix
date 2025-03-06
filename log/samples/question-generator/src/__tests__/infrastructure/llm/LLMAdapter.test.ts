@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createOpenAIAdapter } from '../../../infrastructure/llm/LLMAdapter.js';
-import type { LLMResponse, PromptParams, Question, QuestionCategory, DifficultyLevel } from '../../../domain/models/types.js';
+import type { LLMResponse, PromptParams, Question, QuestionCategory, DifficultyLevel, QuestionLanguage } from '../../../domain/models/types.js';
 
 // モックデータの作成
 const mockPromptParams: PromptParams = {
@@ -111,6 +111,74 @@ describe('LLMAdapter', () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toContain('JSON解析エラー');
+    });
+  });
+
+  describe('言語パラメータの処理', () => {
+    it('言語パラメータが指定されている場合、適切なプロンプトが生成されること', async () => {
+      // 言語パラメータを含むプロンプト
+      const paramsWithLanguage: PromptParams = {
+        ...mockPromptParams,
+        language: 'en'
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify(mockSuccessResponse.questions),
+              },
+            },
+          ],
+        }),
+      });
+
+      const adapter = createOpenAIAdapter({
+        apiKey: 'test-key',
+        model: 'gpt-3.5-turbo',
+      });
+
+      await adapter.generateQuestions(paramsWithLanguage);
+
+      // fetchが呼ばれたときのbodyパラメータを検証
+      const fetchCallArgs = mockFetch.mock.calls[0][1];
+      const body = JSON.parse(fetchCallArgs.body);
+      const userContent = body.messages[1].content;
+
+      // 英語のプロンプトが含まれているか確認
+      expect(userContent).toContain('language: en');
+    });
+
+    it('言語パラメータが指定されていない場合、デフォルト言語（ja）が使用されること', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify(mockSuccessResponse.questions),
+              },
+            },
+          ],
+        }),
+      });
+
+      const adapter = createOpenAIAdapter({
+        apiKey: 'test-key',
+        model: 'gpt-3.5-turbo',
+      });
+
+      await adapter.generateQuestions(mockPromptParams);
+
+      // fetchが呼ばれたときのbodyパラメータを検証
+      const fetchCallArgs = mockFetch.mock.calls[0][1];
+      const body = JSON.parse(fetchCallArgs.body);
+      const userContent = body.messages[1].content;
+
+      // デフォルト言語（ja）が使用されていることを確認
+      expect(userContent).toContain('language: ja');
     });
   });
 });

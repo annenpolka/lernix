@@ -10,7 +10,7 @@ config();
 
 import chalk from 'chalk';
 import { Command } from 'commander';
-import type { DifficultyLevel, GenerationRequest, Question, QuestionCategory } from './domain/models/types.js';
+import type { DifficultyLevel, GenerationRequest, Question, QuestionCategory, QuestionLanguage } from './domain/models/types.js';
 import { createQuestionGenerationService } from './domain/services/QuestionGenerationService.js';
 import { createCacheManager } from './infrastructure/cache/CacheManager.js';
 import { createOpenAIAdapter, OPENAI_MODELS } from './infrastructure/llm/LLMAdapter.js';
@@ -112,6 +112,24 @@ const getQuestionGenerationRequest = async (): Promise<GenerationRequest> => {
     }
   ]);
 
+  const { language } = await inquirer.prompt([
+    {
+      type: 'list',
+      name: 'language',
+      message: '問題の言語を選択:',
+      choices: [
+        { name: '日本語', value: 'ja' },
+        { name: '英語', value: 'en' },
+        { name: 'フランス語', value: 'fr' },
+        { name: 'ドイツ語', value: 'de' },
+        { name: 'スペイン語', value: 'es' },
+        { name: '中国語', value: 'zh' },
+        { name: '韓国語', value: 'ko' }
+      ],
+      default: 'ja'
+    }
+  ]);
+
   const { additionalInstructions } = await inquirer.prompt([
     {
       type: 'input',
@@ -124,6 +142,7 @@ const getQuestionGenerationRequest = async (): Promise<GenerationRequest> => {
     category: category as QuestionCategory,
     difficulty: difficulty as DifficultyLevel,
     count,
+    language: language as QuestionLanguage,
     additionalInstructions: additionalInstructions || undefined
   };
 };
@@ -154,6 +173,7 @@ export const runHeadless = async (options: {
   category: QuestionCategory;
   difficulty: DifficultyLevel;
   count: number;
+  language?: QuestionLanguage;
   additionalInstructions?: string;
   outputPath?: string;
 }): Promise<Question[]> => {
@@ -175,6 +195,7 @@ export const runHeadless = async (options: {
     category: options.category,
     difficulty: options.difficulty,
     count: options.count,
+    language: options.language,
     additionalInstructions: options.additionalInstructions
   };
 
@@ -213,6 +234,7 @@ const setupCliCommands = (): void => {
     .option('--model <model>', 'OpenAIモデル名', 'gpt-3.5-turbo')
     .requiredOption('--category <category>', '問題カテゴリ: math, science, history, language, programming, general_knowledge')
     .requiredOption('--difficulty <level>', '難易度: easy, medium, hard, expert')
+    .option('--language <lang>', '問題の言語: ja, en, fr, de, es, zh, ko', 'ja')
     .option('--count <number>', '生成する問題数', '1')
     .option('--instructions <text>', '追加指示（オプション）')
     .option('--output <path>', '結果を出力するJSONファイルのパス')
@@ -226,6 +248,7 @@ const setupCliCommands = (): void => {
           model: options.model,
           category: options.category as QuestionCategory,
           difficulty: options.difficulty as DifficultyLevel,
+          language: options.language as QuestionLanguage,
           count: parseInt(options.count, 10),
           additionalInstructions: options.instructions,
           outputPath: options.output

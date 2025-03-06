@@ -23,6 +23,18 @@ export type QuestionCategory =
   | 'general_knowledge';
 
 /**
+ * 問題の言語
+ */
+export type QuestionLanguage =
+  | 'ja'
+  | 'en'
+  | 'fr'
+  | 'de'
+  | 'es'
+  | 'zh'
+  | 'ko';
+
+/**
  * 問題の選択肢
  */
 export type Choice = {
@@ -54,6 +66,7 @@ export type GenerationRequest = {
   count: number;
   excludeIds?: string[];
   additionalInstructions?: string;
+  language?: QuestionLanguage;
 };
 
 /**
@@ -65,6 +78,7 @@ export type PromptParams = {
   count: number;
   excludeIds?: string[];
   additionalInstructions?: string;
+  language?: QuestionLanguage;
 };
 
 /**

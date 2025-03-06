@@ -9,10 +9,12 @@ import { config } from 'dotenv';
 config();
 
 import chalk from 'chalk';
+import { Command } from 'commander';
 import type { DifficultyLevel, GenerationRequest, Question, QuestionCategory } from './domain/models/types.js';
 import { createQuestionGenerationService } from './domain/services/QuestionGenerationService.js';
 import { createCacheManager } from './infrastructure/cache/CacheManager.js';
 import { createOpenAIAdapter, OPENAI_MODELS } from './infrastructure/llm/LLMAdapter.js';
+import { writeFileSync } from 'fs';
 
 // ESMでのrequireの代わり - 必要に応じて使用
 import { createRequire } from 'module';
@@ -20,6 +22,9 @@ const require = createRequire(import.meta.url);
 
 // inquirerをESモジュールとして直接インポート
 import inquirer from 'inquirer';
+
+// CLIプログラムの定義
+const program = new Command();
 
 /**
  * OpenAI APIキーの取得（環境変数またはユーザー入力）
@@ -140,9 +145,112 @@ const displayQuestion = (index: number, question: Question): void => {
 };
 
 /**
+ * ヘッドレスモードでの問題生成
+ * E2Eテスト用の非対話実行モード
+ */
+export const runHeadless = async (options: {
+  apiKey: string;
+  model: string;
+  category: QuestionCategory;
+  difficulty: DifficultyLevel;
+  count: number;
+  additionalInstructions?: string;
+  outputPath?: string;
+}): Promise<Question[]> => {
+  // サービスの初期化
+  const llmAdapter = createOpenAIAdapter({
+    apiKey: options.apiKey,
+    model: options.model,
+  });
+
+  const cacheManager = createCacheManager();
+
+  const questionService = createQuestionGenerationService({
+    llmAdapter,
+    cacheManager,
+  });
+
+  // リクエストの作成
+  const request: GenerationRequest = {
+    category: options.category,
+    difficulty: options.difficulty,
+    count: options.count,
+    additionalInstructions: options.additionalInstructions
+  };
+
+  // 問題生成
+  const result = await questionService.generateQuestions(request);
+
+  if (!result.success || !result.questions || result.questions.length === 0) {
+    throw new Error(`問題生成に失敗しました: ${result.error || '不明なエラー'}`);
+  }
+
+  // 結果ファイルを出力（オプション）
+  if (options.outputPath) {
+    writeFileSync(
+      options.outputPath,
+      JSON.stringify(result.questions, null, 2),
+      'utf-8'
+    );
+  }
+
+  return result.questions;
+};
+
+/**
+ * CLI引数の設定
+ */
+const setupCliCommands = (): void => {
+  program
+    .name('question-generator')
+    .description('LLMを使用した問題生成ツール')
+    .version('0.1.0');
+
+  program
+    .command('generate')
+    .description('非対話モードで問題を生成（E2Eテスト用）')
+    .requiredOption('--apiKey <key>', 'OpenAI APIキー、または環境変数OPENAI_API_KEYを使用')
+    .option('--model <model>', 'OpenAIモデル名', 'gpt-3.5-turbo')
+    .requiredOption('--category <category>', '問題カテゴリ: math, science, history, language, programming, general_knowledge')
+    .requiredOption('--difficulty <level>', '難易度: easy, medium, hard, expert')
+    .option('--count <number>', '生成する問題数', '1')
+    .option('--instructions <text>', '追加指示（オプション）')
+    .option('--output <path>', '結果を出力するJSONファイルのパス')
+    .action(async (options) => {
+      try {
+        const apiKey = options.apiKey || process.env.OPENAI_API_KEY;
+        if (!apiKey) throw new Error('APIキーが必要です');
+
+        await runHeadless({
+          apiKey,
+          model: options.model,
+          category: options.category as QuestionCategory,
+          difficulty: options.difficulty as DifficultyLevel,
+          count: parseInt(options.count, 10),
+          additionalInstructions: options.instructions,
+          outputPath: options.output
+        });
+      } catch (error) {
+        console.error(chalk.red(`エラー: ${(error as Error).message}`));
+        process.exit(1);
+      }
+    });
+};
+
+/**
  * メインの実行関数
  */
 const run = async (): Promise<void> => {
+  // CLIコマンドの設定
+  setupCliCommands();
+
+  // コマンドライン引数が指定されている場合はパース
+  if (process.argv.length > 2) {
+    program.parse();
+    return;
+  }
+
+  // 引数がない場合は対話モードで起動
   console.log(chalk.bold.blue('\n🧠 Lernix 問題生成 CLI 🧠\n'));
 
   try {
@@ -215,5 +323,8 @@ const run = async (): Promise<void> => {
 // ESモジュールでの実行判定
 const isMainModule = import.meta.url === `file://${process.argv[1]}`;
 if (isMainModule) {
-  run();
+  run().catch(error => {
+    console.error(chalk.red(`実行エラー: ${error.message}`));
+    process.exit(1);
+  });
 }

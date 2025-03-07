@@ -1,11 +1,13 @@
 /**
- * Geminiアダプター: Google Gemini APIへの統一インターフェースを提供
- * Structured Outputs機能を活用した実装
+ * Geminiアダプター:
+ * Google Gemini APIへのインターフェースを提供し、プロンプトビルダーを活用したLLM呼び出しを実装
+ * Structured Outputs機能も活用
  */
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import dotenv from 'dotenv';
 import type { DifficultyLevel, LLMResponse, PromptParams, QuestionCategory } from '../../domain/models/types.js';
 import type { LLMAdapter } from './LLMAdapter.js';
+import { createGeminiPromptBuilder } from '../prompt/geminiPromptBuilder.js';
 
 // 環境変数の読み込み
 dotenv.config();
@@ -21,6 +23,7 @@ export type GeminiAdapterConfig = {
   model: string;
   temperature?: number;
   maxOutputTokens?: number;
+  promptBuilder?: any; // カスタムプロンプトビルダーを許可（テスト目的）
 };
 
 /**
@@ -110,69 +113,32 @@ export const createGeminiAdapter = (config: GeminiAdapterConfig): LLMAdapter => 
   // Gemini APIクライアントの初期化
   const genAI = new GoogleGenerativeAI(config.apiKey);
 
-  /**
-   * プロンプトの生成
-   */
-  const buildPrompt = (params: PromptParams): string => {
-    const { category, difficulty, count, excludeIds, additionalInstructions, language } = params;
-
-    // デフォルト言語は日本語
-    const promptLanguage = language || 'ja';
-
-    // 英語の場合は英語のプロンプトを生成
-    if (promptLanguage === 'en') {
-      let prompt = `Generate ${count} educational questions with the following criteria:\n`;
-      prompt += `- Category: ${category}\n`;
-      prompt += `- Difficulty: ${difficulty}\n`;
-      prompt += `- language: ${promptLanguage}\n`;
-      prompt += `- Format: Multiple choice with 4 options\n`;
-      prompt += `- Include the correct answer for each question\n`;
-      prompt += `- Include an explanation for each question\n`;
-      prompt += `- Assign a unique ID for each question\n`;
-
-      if (excludeIds && excludeIds.length > 0) {
-        prompt += `\nExclude IDs: ${excludeIds.join(', ')}`;
-      }
-
-      if (additionalInstructions) {
-        prompt += `\nAdditional instructions: ${additionalInstructions}`;
-      }
-
-      return prompt;
-    }
-
-    // 日本語のプロンプト（デフォルト）
-    let prompt = `以下の条件に合致する問題を${count}問生成してください:\n`;
-    prompt += `- カテゴリ: ${category}\n`;
-    prompt += `- 難易度: ${difficulty}\n`;
-    prompt += `- language: ${promptLanguage}\n`;
-    prompt += `- 形式: 4択問題\n`;
-    prompt += `- 各問題には正解の選択肢を含めてください\n`;
-    prompt += `- 各問題には説明文を含めてください\n`;
-    prompt += `- 各問題には一意のIDを割り当ててください\n`;
-
-    // JSON形式に関する重要な指示を追加
-    prompt += `- 重要: 応答は必ず有効なJSON配列形式にしてください\n`;
-    prompt += `- 重要: JSON解析を壊す可能性のある特殊文字は避けてください\n`;
-    prompt += `- 重要: 数式を使用する場合は、シンプルで整形された形式を維持してください\n`;
-
-    if (excludeIds && excludeIds.length > 0) {
-      prompt += `\n除外するID: ${excludeIds.join(', ')}`;
-    }
-
-    if (additionalInstructions) {
-      prompt += `\n追加指示: ${additionalInstructions}`;
-    }
-
-    return prompt;
-  };
+  // プロンプトビルダーの初期化（カスタムまたはデフォルト）
+  const promptBuilder = config.promptBuilder || createGeminiPromptBuilder();
 
   /**
    * Gemini APIを呼び出して問題を生成する
    */
   const generateQuestions = async (params: PromptParams): Promise<LLMResponse> => {
     try {
-      const prompt = buildPrompt(params);
+      // プロンプト生成ロジックをビルダーに委譲
+      const builder = promptBuilder
+        .withCategory(params.category)
+        .withDifficulty(params.difficulty)
+        .withCount(params.count)
+        .withLanguage(params.language || 'ja');
+
+      // オプションパラメータの設定
+      if (params.excludeIds && params.excludeIds.length > 0) {
+        builder.withExcludeIds(params.excludeIds);
+      }
+
+      if (params.additionalInstructions) {
+        builder.withAdditionalInstructions(params.additionalInstructions);
+      }
+
+      // プロンプトを構築
+      const prompt = builder.build();
 
       // スキーマの作成
       const questionSchema = createQuestionSchema(params.category, params.difficulty);

@@ -7,17 +7,14 @@
     "dev": "node --loader ts-node/esm src/cli.ts",
     "build": "tsc",
     "start": "node dist/cli.js",
-    "test": "vitest run",
     "dev:verbose": "NODE_DEBUG=* node --loader ts-node/esm src/cli.ts",
+    "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:integration": "vitest run src/__tests__/integration",
-    "test:integration:api": "TEST_MODE=api vitest run src/__tests__/integration",
     "test:gemini": "vitest run src/__tests__/integration/GeminiIntegration.test.ts",
-    "test:gemini:api": "TEST_MODE=api vitest run src/__tests__/integration/GeminiIntegration.test.ts",
     "test:openai": "vitest run src/__tests__/integration/OpenAIIntegration.test.ts",
-    "test:openai:api": "TEST_MODE=api vitest run src/__tests__/integration/OpenAIIntegration.test.ts",
-    "test:headless": "ts-node --esm scripts/run-integration-tests.ts"
+    "test:api": "TEST_MODE=api vitest run src/__tests__/integration"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.0",

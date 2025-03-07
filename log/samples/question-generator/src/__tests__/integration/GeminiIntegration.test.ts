@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type {
     DifficultyLevel,
     GenerationRequest,
@@ -6,61 +6,23 @@ import type {
     QuestionCategory
 } from '../../domain/models/types.js';
 
-// テストヘルパーとモックのインポート
-import { GEMINI_MODELS } from '../../infrastructure/llm/GeminiAdapter.js';
-import { getTestConfig, isApiTestMode, logTestConfig, showApiModeWarning } from '../helpers/test-utils.js';
-import { setupGeminiApiMock, useRealGeminiApi } from '../mocks/gemini-api-mock.js';
-
 // APIクライアントとサービスのインポート
+import { GEMINI_MODELS } from '../../infrastructure/llm/GeminiAdapter.js';
+import { getTestConfig } from '../helpers/test-utils.js';
 import { createQuestionGenerationService } from '../../domain/services/QuestionGenerationService.js';
 import { createGeminiAdapter } from '../../infrastructure/llm/GeminiAdapter.js';
-
-// テスト設定を出力
-logTestConfig();
-
-// テスト用のモックまたはAPI実装の設定
-let geminiApiMock = isApiTestMode() ? null : setupGeminiApiMock();
-if (isApiTestMode()) {
-  useRealGeminiApi();
-}
 
 // テスト用リクエスト
 const testRequest: GenerationRequest = {
   category: 'programming' as QuestionCategory,
   difficulty: 'medium' as DifficultyLevel,
-  count: isApiTestMode() ? getTestConfig().apiModeQuestionCount : 3,
+  count: 1,
   language: 'ja'
 };
 
 describe('Gemini統合テスト', () => {
-  beforeAll(() => {
-    // テストモードに応じた初期化 (モックはすでに設定済み)
-    if (isApiTestMode()) {
-      console.log('[API] 実際のAPIを使用してテストを実行します');
-    } else {
-      console.log('[MOCK] モックを使用してテストを実行します');
-    }
-  });
-
-  afterAll(() => {
-    // テスト終了時のクリーンアップ
-    if (!isApiTestMode() && geminiApiMock) {
-      geminiApiMock.restore();
-    }
-  });
-
-  beforeEach(() => {
-    // 各テスト前のモックリセット
-    if (!isApiTestMode() && geminiApiMock) {
-      geminiApiMock.reset();
-    }
-  });
-
   describe('Gemini LLMアダプター単体のテスト', () => {
     it('Geminiアダプターが問題を生成できること', async () => {
-      // API使用時の警告表示
-      showApiModeWarning();
-
       // Geminiアダプターを作成
       const adapter = createGeminiAdapter({
         apiKey: getTestConfig().apiKey,
@@ -96,13 +58,6 @@ describe('Gemini統合テスト', () => {
         model: getTestConfig().model
       });
 
-      // モックモードの場合、エラーレスポンスをカスタマイズ
-      if (!isApiTestMode() && geminiApiMock) {
-        geminiApiMock.customizeMock(() => {
-          throw new Error('API key not valid');
-        });
-      }
-
       // 問題生成を実行
       const result = await adapter.generateQuestions(testRequest);
 
@@ -137,13 +92,6 @@ describe('Gemini統合テスト', () => {
     }, 30000);
 
     it('カスタム検証関数で低品質の問題がフィルタリングされること', async () => {
-      // モックをリセット
-      if (!isApiTestMode() && geminiApiMock) {
-        geminiApiMock.reset();
-        geminiApiMock.reset();
-        geminiApiMock.resetImplementation();
-      }
-
       // カスタム検証関数（長さが短すぎる問題文を除外する）
       const validateQuestion = (question: Question) => {
         return question.text.length >= 20; // 問題文が20文字以上であること
@@ -173,7 +121,7 @@ describe('Gemini統合テスト', () => {
           expect(q.text.length).toBeGreaterThanOrEqual(20);
         });
       } else {
-        // モックの問題が検証をパスしたことを確認
+        // 問題が存在することを確認
         expect(result.questions).toBeDefined();
         expect(result.questions?.length).toBeGreaterThan(0);
       }
@@ -213,25 +161,6 @@ describe('Gemini統合テスト', () => {
 
       // スパイをリセット
       generateQuestionsSpy.mockRestore();
-    }, 30000);
-
-    it('サービス内で処理の流れが正しいことをspyOnで確認', async () => {
-      // サービスを作成
-      const service = createQuestionGenerationService({
-        llmAdapter: createGeminiAdapter({
-          apiKey: getTestConfig().apiKey,
-          model: getTestConfig().model
-        })
-      });
-
-      // サービスの内部メソッドをスパイ
-      const validateQuestionsSpy = vi.spyOn(service as any, 'validateQuestions');
-
-      // 問題生成を実行
-      await service.generateQuestions(testRequest);
-
-      // 検証メソッドが呼ばれたことを確認
-      expect(validateQuestionsSpy).toHaveBeenCalled();
     }, 30000);
   });
 

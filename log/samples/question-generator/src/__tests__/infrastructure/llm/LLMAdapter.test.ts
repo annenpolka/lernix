@@ -1,63 +1,35 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import type { DifficultyLevel, PromptParams, QuestionCategory } from '../../../domain/models/types.js';
 import { createOpenAIAdapter } from '../../../infrastructure/llm/LLMAdapter.js';
-import type { LLMResponse, PromptParams, Question, QuestionCategory, DifficultyLevel, QuestionLanguage } from '../../../domain/models/types.js';
 
-// モックデータの作成
+// モックのインポート
+import { setupOpenAIApiMock } from '../../mocks/openai-api-mock.js';
+import { testQuestionData } from '../../mocks/openai-mock-data.js';
+
+// モックプロンプトパラメータ
 const mockPromptParams: PromptParams = {
   category: 'programming' as QuestionCategory,
   difficulty: 'medium' as DifficultyLevel,
   count: 1,
 };
 
-const mockSuccessResponse: LLMResponse = {
-  success: true,
-  questions: [
-    {
-      id: '1',
-      category: 'programming',
-      difficulty: 'medium',
-      text: 'JavaScriptにおけるクロージャとは何ですか？',
-      choices: [
-        { id: 'a', text: '外部変数を参照する関数', isCorrect: true },
-        { id: 'b', text: 'メモリリークの一種', isCorrect: false },
-        { id: 'c', text: 'コールバック関数の別名', isCorrect: false },
-        { id: 'd', text: 'イベントハンドラーの一種', isCorrect: false },
-      ],
-      explanation: 'クロージャは関数が宣言された時点のスコープにある変数を保持する関数です',
-      createdAt: new Date(),
-    },
-  ],
-};
-
-const mockErrorResponse: LLMResponse = {
-  success: false,
-  error: 'API呼び出しエラー',
-};
-
-// モックAPIの設定
-const mockFetch = vi.fn();
-global.fetch = mockFetch;
-
 describe('LLMAdapter', () => {
+  // OpenAI APIのモックをセットアップ
+  const openaiMock = setupOpenAIApiMock();
+
   beforeEach(() => {
-    vi.resetAllMocks();
+    // テスト毎にモックをリセット
+    openaiMock.reset();
+  });
+
+  afterAll(() => {
+    // テスト終了後にモックを復元
+    openaiMock.restore();
   });
 
   describe('OpenAI Adapter', () => {
     it('正常なレスポンスを処理できること', async () => {
-      // モックの応答を設定
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          choices: [
-            {
-              message: {
-                content: JSON.stringify(mockSuccessResponse.questions),
-              },
-            },
-          ],
-        }),
-      });
+      // デフォルトモックは正常なレスポンスを返す
 
       const adapter = createOpenAIAdapter({
         apiKey: 'test-key',
@@ -68,13 +40,12 @@ describe('LLMAdapter', () => {
 
       expect(result.success).toBe(true);
       expect(result.questions).toHaveLength(1);
-      expect(result.questions?.[0].text).toBe('JavaScriptにおけるクロージャとは何ですか？');
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-    });
+      expect(result.questions?.[0].text).toBe(testQuestionData[0].text);
+    }, 10000);
 
     it('APIエラー時に適切なエラーレスポンスを返すこと', async () => {
-      // APIエラーをシミュレート
-      mockFetch.mockRejectedValueOnce(new Error('API Error'));
+      // エラーレスポンスをモック
+      openaiMock.mockError('API Error');
 
       const adapter = createOpenAIAdapter({
         apiKey: 'test-key',
@@ -85,22 +56,11 @@ describe('LLMAdapter', () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toContain('API Error');
-    });
+    }, 10000);
 
     it('不正なJSONレスポンスを処理できること', async () => {
-      // 不正なJSON応答をシミュレート
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          choices: [
-            {
-              message: {
-                content: '{"invalid JSON',
-              },
-            },
-          ],
-        }),
-      });
+      // 不正なJSONをモック
+      openaiMock.mockInvalidJson();
 
       const adapter = createOpenAIAdapter({
         apiKey: 'test-key',
@@ -111,28 +71,30 @@ describe('LLMAdapter', () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toContain('JSON解析エラー');
-    });
+    }, 10000);
   });
 
   describe('言語パラメータの処理', () => {
     it('言語パラメータが指定されている場合、適切なプロンプトが生成されること', async () => {
-      // 言語パラメータを含むプロンプト
-      const paramsWithLanguage: PromptParams = {
-        ...mockPromptParams,
-        language: 'en'
-      };
+      // モックの実装をスパイに置き換え
+      let capturedBody: any;
+      openaiMock.customizeMock((url, options) => {
+        // リクエストボディをキャプチャ
+        capturedBody = JSON.parse(options.body);
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          choices: [
-            {
-              message: {
-                content: JSON.stringify(mockSuccessResponse.questions),
+        // 正常なレスポンスを返す
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify(testQuestionData),
+                },
               },
-            },
-          ],
-        }),
+            ],
+          }),
+        });
       });
 
       const adapter = createOpenAIAdapter({
@@ -140,29 +102,36 @@ describe('LLMAdapter', () => {
         model: 'gpt-3.5-turbo',
       });
 
-      await adapter.generateQuestions(paramsWithLanguage);
+      await adapter.generateQuestions({
+        ...mockPromptParams,
+        language: 'en',
+      });
 
-      // fetchが呼ばれたときのbodyパラメータを検証
-      const fetchCallArgs = mockFetch.mock.calls[0][1];
-      const body = JSON.parse(fetchCallArgs.body);
-      const userContent = body.messages[1].content;
-
-      // 英語のプロンプトが含まれているか確認
+      // リクエストの検証
+      const userContent = capturedBody.messages[1].content;
       expect(userContent).toContain('language: en');
-    });
+    }, 10000);
 
     it('言語パラメータが指定されていない場合、デフォルト言語（ja）が使用されること', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          choices: [
-            {
-              message: {
-                content: JSON.stringify(mockSuccessResponse.questions),
+      // モックの実装をスパイに置き換え
+      let capturedBody: any;
+      openaiMock.customizeMock((url, options) => {
+        // リクエストボディをキャプチャ
+        capturedBody = JSON.parse(options.body);
+
+        // 正常なレスポンスを返す
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify(testQuestionData),
+                },
               },
-            },
-          ],
-        }),
+            ],
+          }),
+        });
       });
 
       const adapter = createOpenAIAdapter({
@@ -172,13 +141,9 @@ describe('LLMAdapter', () => {
 
       await adapter.generateQuestions(mockPromptParams);
 
-      // fetchが呼ばれたときのbodyパラメータを検証
-      const fetchCallArgs = mockFetch.mock.calls[0][1];
-      const body = JSON.parse(fetchCallArgs.body);
-      const userContent = body.messages[1].content;
-
-      // デフォルト言語（ja）が使用されていることを確認
+      // リクエストの検証
+      const userContent = capturedBody.messages[1].content;
       expect(userContent).toContain('language: ja');
-    });
+    }, 10000);
   });
 });

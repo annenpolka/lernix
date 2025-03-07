@@ -14,6 +14,7 @@ import type { DifficultyLevel, GenerationRequest, Question, QuestionCategory, Qu
 import { createQuestionGenerationService } from './domain/services/QuestionGenerationService.js';
 import { createCacheManager } from './infrastructure/cache/CacheManager.js';
 import { createOpenAIAdapter, OPENAI_MODELS } from './infrastructure/llm/LLMAdapter.js';
+import { createGeminiAdapter, GEMINI_MODELS } from './infrastructure/llm/GeminiAdapter.js';
 import { writeFileSync } from 'fs';
 
 // ESMでのrequireの代わり - 必要に応じて使用
@@ -25,6 +26,32 @@ import inquirer from 'inquirer';
 
 // CLIプログラムの定義
 const program = new Command();
+
+/**
+ * APIプロバイダーの選択
+ */
+const getAPIProvider = async (): Promise<'openai' | 'gemini'> => {
+  const { provider } = await inquirer.prompt([
+    {
+      type: 'list',
+      name: 'provider',
+      message: 'LLMプロバイダーを選択:',
+      choices: [
+        {
+          name: 'OpenAI (GPT-3.5/4.5)',
+          value: 'openai'
+        },
+        {
+          name: 'Google Gemini (2.0-flash推奨)',
+          value: 'gemini'
+        }
+      ],
+      default: 'openai'
+    }
+  ]);
+
+  return provider;
+};
 
 /**
  * OpenAI APIキーの取得（環境変数またはユーザー入力）
@@ -49,6 +76,29 @@ const getOpenAIKey = async (): Promise<string> => {
 };
 
 /**
+ * Gemini APIキーの取得（環境変数またはユーザー入力）
+ */
+const getGeminiKey = async (): Promise<string> => {
+  const apiKey = process.env.GEMINI_API_KEY;
+
+  if (apiKey) {
+    return apiKey;
+  }
+
+  const { key } = await inquirer.prompt([
+    {
+      type: 'password',
+      name: 'key',
+      message: 'Google Gemini APIキーを入力してください:',
+      validate: (input: string) => input.length > 0 ? true : 'APIキーは必須です'
+    }
+  ]);
+
+  return key;
+};
+
+
+/**
  * OpenAIモデルの選択
  */
 const selectOpenAIModel = async (): Promise<string> => {
@@ -63,6 +113,26 @@ const selectOpenAIModel = async (): Promise<string> => {
         { name: 'o3（STEM特化）', value: OPENAI_MODELS['o3'] },
         { name: 'gpt-4o（マルチモーダル対応）', value: OPENAI_MODELS['gpt-4o'] },
         { name: 'gpt-4.5（最新高性能モデル）', value: OPENAI_MODELS['gpt-4.5'] }
+      ]
+    }
+  ]);
+
+  return model;
+};
+
+/**
+ * Geminiモデルの選択
+ */
+const selectGeminiModel = async (): Promise<string> => {
+  const { model } = await inquirer.prompt([
+    {
+      type: 'list',
+      name: 'model',
+      message: 'Geminiモデルを選択:',
+      choices: [
+        { name: 'gemini-2.0-flash（推奨: 高速軽量モデル）', value: GEMINI_MODELS['gemini-2.0-flash'] },
+        { name: 'gemini-2.0-pro（最高性能モデル）', value: GEMINI_MODELS['gemini-2.0-pro'] },
+        { name: 'gemini-1.5-pro（従来の高性能モデル）', value: GEMINI_MODELS['gemini-1.5-pro'] }
       ]
     }
   ]);
@@ -167,7 +237,8 @@ const displayQuestion = (index: number, question: Question): void => {
  * ヘッドレスモードでの問題生成
  * E2Eテスト用の非対話実行モード
  */
-export const runHeadless = async (options: {
+export const runHeadlessOpenAI = async (options: {
+  provider: 'openai',
   apiKey: string;
   model: string;
   category: QuestionCategory;
@@ -219,6 +290,61 @@ export const runHeadless = async (options: {
 };
 
 /**
+ * ヘッドレスモードでのGemini APIによる問題生成
+ */
+export const runHeadlessGemini = async (options: {
+  provider: 'gemini',
+  apiKey: string;
+  model: string;
+  category: QuestionCategory;
+  difficulty: DifficultyLevel;
+  count: number;
+  language?: QuestionLanguage;
+  additionalInstructions?: string;
+  outputPath?: string;
+}): Promise<Question[]> => {
+  // サービスの初期化
+  const llmAdapter = createGeminiAdapter({
+    apiKey: options.apiKey,
+    model: options.model,
+  });
+
+  const cacheManager = createCacheManager();
+
+  const questionService = createQuestionGenerationService({
+    llmAdapter,
+    cacheManager,
+  });
+
+  // リクエストの作成
+  const request: GenerationRequest = {
+    category: options.category,
+    difficulty: options.difficulty,
+    count: options.count,
+    language: options.language,
+    additionalInstructions: options.additionalInstructions
+  };
+
+  // 問題生成
+  const result = await questionService.generateQuestions(request);
+
+  if (!result.success || !result.questions || result.questions.length === 0) {
+    throw new Error(`問題生成に失敗しました: ${result.error || '不明なエラー'}`);
+  }
+
+  // 結果ファイルを出力（オプション）
+  if (options.outputPath) {
+    writeFileSync(
+      options.outputPath,
+      JSON.stringify(result.questions, null, 2),
+      'utf-8'
+    );
+  }
+
+  return result.questions;
+};
+
+/**
  * CLI引数の設定
  */
 const setupCliCommands = (): void => {
@@ -229,9 +355,11 @@ const setupCliCommands = (): void => {
 
   program
     .command('generate')
-    .description('非対話モードで問題を生成（E2Eテスト用）')
-    .requiredOption('--apiKey <key>', 'OpenAI APIキー、または環境変数OPENAI_API_KEYを使用')
-    .option('--model <model>', 'OpenAIモデル名', 'gpt-3.5-turbo')
+    .description('非対話モードで問題を生成（E2Eテスト/バッチ処理用）')
+    .requiredOption('--provider <provider>', 'LLMプロバイダー: openai または gemini', 'openai')
+    .option('--openaiKey <key>', 'OpenAI APIキー、または環境変数OPENAI_API_KEYを使用')
+    .option('--geminiKey <key>', 'Gemini APIキー、または環境変数GEMINI_API_KEYを使用')
+    .option('--model <model>', 'LLMモデル名 (OpenAI/Gemini)')
     .requiredOption('--category <category>', '問題カテゴリ: math, science, history, language, programming, general_knowledge')
     .requiredOption('--difficulty <level>', '難易度: easy, medium, hard, expert')
     .option('--language <lang>', '問題の言語: ja, en, fr, de, es, zh, ko', 'ja')
@@ -240,19 +368,42 @@ const setupCliCommands = (): void => {
     .option('--output <path>', '結果を出力するJSONファイルのパス')
     .action(async (options) => {
       try {
-        const apiKey = options.apiKey || process.env.OPENAI_API_KEY;
-        if (!apiKey) throw new Error('APIキーが必要です');
+        // プロバイダー指定に基づいて処理を分岐
+        if (options.provider === 'openai') {
+          const apiKey = options.openaiKey || process.env.OPENAI_API_KEY;
+          if (!apiKey) throw new Error('OpenAI APIキーが必要です');
 
-        await runHeadless({
-          apiKey,
-          model: options.model,
-          category: options.category as QuestionCategory,
-          difficulty: options.difficulty as DifficultyLevel,
-          language: options.language as QuestionLanguage,
-          count: parseInt(options.count, 10),
-          additionalInstructions: options.instructions,
-          outputPath: options.output
-        });
+          const model = options.model || process.env.DEFAULT_OPENAI_MODEL || 'gpt-3.5-turbo';
+
+          await runHeadlessOpenAI({
+            provider: 'openai',
+            apiKey,
+            model,
+            category: options.category as QuestionCategory,
+            difficulty: options.difficulty as DifficultyLevel,
+            language: options.language as QuestionLanguage,
+            count: parseInt(options.count, 10),
+            additionalInstructions: options.instructions,
+            outputPath: options.output
+          });
+        } else if (options.provider === 'gemini') {
+          const apiKey = options.geminiKey || process.env.GEMINI_API_KEY;
+          if (!apiKey) throw new Error('Gemini APIキーが必要です');
+
+          const model = options.model || process.env.DEFAULT_GEMINI_MODEL || 'gemini-2.0-flash';
+
+          await runHeadlessGemini({
+            provider: 'gemini',
+            apiKey,
+            model,
+            category: options.category as QuestionCategory,
+            difficulty: options.difficulty as DifficultyLevel,
+            language: options.language as QuestionLanguage,
+            count: parseInt(options.count, 10),
+            additionalInstructions: options.instructions,
+            outputPath: options.output
+          });
+        }
       } catch (error) {
         console.error(chalk.red(`エラー: ${(error as Error).message}`));
         process.exit(1);
@@ -277,20 +428,42 @@ const run = async (): Promise<void> => {
   console.log(chalk.bold.blue('\n🧠 Lernix 問題生成 CLI 🧠\n'));
 
   try {
-    // APIキーの取得
-    const apiKey = await getOpenAIKey();
+    // プロバイダー選択
+    const provider = await getAPIProvider();
 
-    // OpenAIモデルの選択
-    const model = await selectOpenAIModel();
+    // API アダプター選択
+    let llmAdapter;
 
-    // サービスの初期化
-    const llmAdapter = createOpenAIAdapter({
-      apiKey,
-      model,
-    });
+    if (provider === 'openai') {
+      // OpenAI APIキーの取得
+      const apiKey = await getOpenAIKey();
 
+      // OpenAIモデルの選択
+      const model = await selectOpenAIModel();
+
+      // OpenAIアダプター初期化
+      llmAdapter = createOpenAIAdapter({
+        apiKey,
+        model,
+      });
+    } else { // Gemini
+      // Gemini APIキーの取得
+      const apiKey = await getGeminiKey();
+
+      // Geminiモデル選択
+      const model = await selectGeminiModel();
+
+      // Geminiアダプター初期化
+      llmAdapter = createGeminiAdapter({
+        apiKey,
+        model,
+      });
+    }
+
+    // キャッシュマネージャー初期化
     const cacheManager = createCacheManager();
 
+    // 問題生成サービス初期化
     const questionService = createQuestionGenerationService({
       llmAdapter,
       cacheManager,
@@ -342,8 +515,20 @@ const run = async (): Promise<void> => {
   }
 };
 
+// 型定義をexportして外部から参照可能に
+export type RunHeadlessOptions = {
+  provider: 'openai' | 'gemini';
+  apiKey: string;
+  model: string;
+  category: QuestionCategory;
+  difficulty: DifficultyLevel;
+  count: number;
+  language?: QuestionLanguage;
+  additionalInstructions?: string;
+  outputPath?: string;
+};
+
 // エントリーポイント
-// ESモジュールでの実行判定
 const isMainModule = import.meta.url === `file://${process.argv[1]}`;
 if (isMainModule) {
   run().catch(error => {

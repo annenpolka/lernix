@@ -12,9 +12,15 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:integration": "vitest run src/__tests__/integration",
-    "test:integration:api": "TEST_MODE=api vitest run src/__tests__/integration"
+    "test:integration:api": "TEST_MODE=api vitest run src/__tests__/integration",
+    "test:gemini": "vitest run src/__tests__/integration/GeminiIntegration.test.ts",
+    "test:gemini:api": "TEST_MODE=api vitest run src/__tests__/integration/GeminiIntegration.test.ts",
+    "test:openai": "vitest run src/__tests__/integration/OpenAIIntegration.test.ts",
+    "test:openai:api": "TEST_MODE=api vitest run src/__tests__/integration/OpenAIIntegration.test.ts",
+    "test:headless": "ts-node --esm scripts/run-integration-tests.ts"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.0",
     "axios": "^1.6.2",
     "chalk": "^5.3.0",
     "commander": "^13.1.0",

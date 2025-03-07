@@ -12,7 +12,6 @@ dotenv.config();
 
 // テストモードの確認
 const TEST_MODE = process.env.TEST_MODE || '';
-console.log(`[Gemini] テストモード: ${TEST_MODE}`);
 
 /**
  * Geminiアダプターの設定
@@ -110,7 +109,6 @@ const createQuestionSchema = (category: QuestionCategory, difficulty: Difficulty
 export const createGeminiAdapter = (config: GeminiAdapterConfig): LLMAdapter => {
   // Gemini APIクライアントの初期化
   const genAI = new GoogleGenerativeAI(config.apiKey);
-  console.log(`[Gemini] モデル '${config.model}' を初期化しました`);
 
   /**
    * プロンプトの生成
@@ -153,6 +151,11 @@ export const createGeminiAdapter = (config: GeminiAdapterConfig): LLMAdapter => 
     prompt += `- 各問題には説明文を含めてください\n`;
     prompt += `- 各問題には一意のIDを割り当ててください\n`;
 
+    // JSON形式に関する重要な指示を追加
+    prompt += `- 重要: 応答は必ず有効なJSON配列形式にしてください\n`;
+    prompt += `- 重要: JSON解析を壊す可能性のある特殊文字は避けてください\n`;
+    prompt += `- 重要: 数式を使用する場合は、シンプルで整形された形式を維持してください\n`;
+
     if (excludeIds && excludeIds.length > 0) {
       prompt += `\n除外するID: ${excludeIds.join(', ')}`;
     }
@@ -170,7 +173,6 @@ export const createGeminiAdapter = (config: GeminiAdapterConfig): LLMAdapter => 
   const generateQuestions = async (params: PromptParams): Promise<LLMResponse> => {
     try {
       const prompt = buildPrompt(params);
-      console.log(`[Gemini API Request] モデル: ${config.model}, プロンプト長: ${prompt.length}文字`);
 
       // スキーマの作成
       const questionSchema = createQuestionSchema(params.category, params.difficulty);
@@ -179,8 +181,8 @@ export const createGeminiAdapter = (config: GeminiAdapterConfig): LLMAdapter => 
       const model = genAI.getGenerativeModel({
         model: config.model,
         generationConfig: {
-          temperature: config.temperature ?? 0.7,
-          maxOutputTokens: config.maxOutputTokens ?? 1024,
+          temperature: config.temperature ?? 0.5, // 低めの温度値に設定して安定性を向上
+          maxOutputTokens: config.maxOutputTokens ?? 2048, // トークン数を増やす
           responseMimeType: "application/json",
           responseSchema: questionSchema as any // 型の問題を回避するためanyにキャスト
         }
@@ -201,7 +203,6 @@ export const createGeminiAdapter = (config: GeminiAdapterConfig): LLMAdapter => 
         const apiResponse = await model.generateContent(request);
         // 型変換
         const response = apiResponse as unknown as GeminiResponse;
-        console.log('[Gemini API] 呼び出し成功');
 
         // レスポンスからJSONを抽出
         let responseText: string;
@@ -217,7 +218,6 @@ export const createGeminiAdapter = (config: GeminiAdapterConfig): LLMAdapter => 
               responseText = textResult;
             }
           } catch (error) {
-            console.error(`[Gemini API] テキスト抽出エラー: ${error}`);
             return {
               success: false,
               error: 'テキスト抽出エラー'
@@ -228,7 +228,6 @@ export const createGeminiAdapter = (config: GeminiAdapterConfig): LLMAdapter => 
                   response.response.candidates[0].content.parts.length > 0) {
           // candidatesから直接テキストを取得
           responseText = response.response.candidates[0].content.parts[0].text || '';
-          console.log(`[Gemini API] candidatesからテキスト抽出成功`);
         } else if (typeof response.text === 'function') {
           // 直接response.textがある場合
           try {
@@ -238,31 +237,75 @@ export const createGeminiAdapter = (config: GeminiAdapterConfig): LLMAdapter => 
             } else {
               responseText = textResult;
             }
-            console.log(`[Gemini API] response.textから抽出成功`);
           } catch (error) {
-            console.error(`[Gemini API] レスポンステキスト抽出エラー: ${error}`);
             return { success: false, error: 'レスポンステキスト抽出エラー' };
           }
         } else {
           responseText = JSON.stringify({ error: 'レスポンスからテキストを抽出できませんでした' });
         }
         if (!responseText) {
-          console.error('[Gemini API] 応答内容が空です');
           return {
             success: false,
             error: 'APIからの応答に内容がありません'
           };
         }
 
-        console.log('[Gemini API] レスポンステキスト (先頭100文字):', responseText.substring(0, 100) + '...');
-
         // JSONパース
         try {
-          const parsedQuestions = JSON.parse(responseText);
+          // JSON解析前のサニタイズ処理を追加
+          const sanitizeJsonText = (text: string): string => {
+            // エスケープされていない特殊文字を処理
+            let sanitized = text.replace(/\\(?!["\\/bfnrt])/g, '\\\\');
+
+            // JSON内での引用符のバランスを確認し修正
+            const quoteCount = (sanitized.match(/"/g) || []).length;
+            if (quoteCount % 2 !== 0) {
+              console.warn('[Gemini API] 警告: 引用符が閉じられていない可能性があります');
+              // 最後の閉じ括弧の前に引用符がない場合を検出
+              if (sanitized.lastIndexOf('"') < sanitized.lastIndexOf('}')) {
+                sanitized = sanitized.replace(/}(?=[^"]*$)/, '"}');
+              }
+            }
+
+            // JSON配列の閉じ括弧がない場合に追加
+            if (sanitized.trim().startsWith('[') && !sanitized.trim().endsWith(']')) {
+              sanitized = sanitized.trim() + ']';
+            }
+
+            return sanitized;
+          };
+
+          // サニタイズ処理を実行
+          const sanitizedText = sanitizeJsonText(responseText);
+
+          // デバッグログ
+          if (sanitizedText !== responseText) {
+            console.log('[Gemini API] レスポンスを自動修正しました');
+          }
+
+          let parsedQuestions;
+          try {
+            // 通常のJSON解析を試みる
+            parsedQuestions = JSON.parse(sanitizedText);
+          } catch (jsonError) {
+            // JSONの配列部分だけ抽出して再試行
+            console.warn('[Gemini API] 最初のJSON解析に失敗、部分抽出を試みます');
+            const jsonArrayMatch = sanitizedText.match(/\[\s*\{.*\}\s*\]/s);
+            if (jsonArrayMatch) {
+              try {
+                parsedQuestions = JSON.parse(jsonArrayMatch[0]);
+              } catch (extractError) {
+                // 部分抽出も失敗した場合は元のエラーをスロー
+                throw jsonError;
+              }
+            } else {
+              // 配列部分を抽出できなかった場合は元のエラーをスロー
+              throw jsonError;
+            }
+          }
 
           // 結果が配列でない場合の処理
           if (!Array.isArray(parsedQuestions)) {
-            console.error('[Gemini API] 無効なJSON形式 (配列ではありません)');
             return {
               success: false,
               error: 'APIからの応答が正しいJSON配列形式ではありません'
@@ -280,9 +323,9 @@ export const createGeminiAdapter = (config: GeminiAdapterConfig): LLMAdapter => 
             questions: questionsWithDate
           };
         } catch (error: any) {
-          console.error(`[Gemini API] JSON解析エラー: ${error.message}`);
-          // デバッグのために応答内容の一部を表示
-          console.log('レスポンス内容 (一部):', responseText.substring(0, 200) + '...');
+          console.error('[Gemini API] JSON解析エラー詳細:', error);
+          console.log('[Gemini API] 解析失敗したレスポンス:', responseText.substring(0, 300) + '...');
+
           return {
             success: false,
             error: `JSON解析エラー: ${error.message}`
@@ -290,14 +333,12 @@ export const createGeminiAdapter = (config: GeminiAdapterConfig): LLMAdapter => 
         }
 
       } catch (error: any) {
-        console.error(`[Gemini API] API呼び出しエラー: ${error.message}`);
         return {
           success: false,
           error: `API呼び出しエラー: ${error.message}`
         };
       }
     } catch (error: any) {
-      console.error(`[Gemini API] 予期しないエラー: ${error.message}`);
       return {
         success: false,
         error: `予期しないエラーが発生しました: ${error.message}`

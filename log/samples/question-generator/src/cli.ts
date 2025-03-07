@@ -10,12 +10,12 @@ config();
 
 import chalk from 'chalk';
 import { Command } from 'commander';
+import { writeFileSync } from 'fs';
 import type { DifficultyLevel, GenerationRequest, Question, QuestionCategory, QuestionLanguage } from './domain/models/types.js';
 import { createQuestionGenerationService } from './domain/services/QuestionGenerationService.js';
 import { createCacheManager } from './infrastructure/cache/CacheManager.js';
-import { createOpenAIAdapter, OPENAI_MODELS } from './infrastructure/llm/LLMAdapter.js';
 import { createGeminiAdapter, GEMINI_MODELS } from './infrastructure/llm/GeminiAdapter.js';
-import { writeFileSync } from 'fs';
+import { createOpenAIAdapter, OPENAI_MODELS } from './infrastructure/llm/LLMAdapter.js';
 
 // ESMでのrequireの代わり - 必要に応じて使用
 import { createRequire } from 'module';
@@ -131,8 +131,8 @@ const selectGeminiModel = async (): Promise<string> => {
       message: 'Geminiモデルを選択:',
       choices: [
         { name: 'gemini-2.0-flash（推奨: 高速軽量モデル）', value: GEMINI_MODELS['gemini-2.0-flash'] },
-        { name: 'gemini-2.0-pro（最高性能モデル）', value: GEMINI_MODELS['gemini-2.0-pro'] },
-        { name: 'gemini-1.5-pro（従来の高性能モデル）', value: GEMINI_MODELS['gemini-1.5-pro'] }
+        { name: 'gemini-1.5-pro（高性能モデル）', value: GEMINI_MODELS['gemini-1.5-pro'] },
+        { name: 'gemini-1.5-flash（従来の高速モデル）', value: GEMINI_MODELS['gemini-1.5-flash'] }
       ]
     }
   ]);

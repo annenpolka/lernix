@@ -78,7 +78,7 @@ describe('LLMAdapter', () => {
     it('言語パラメータが指定されている場合、適切なプロンプトが生成されること', async () => {
       // モックの実装をスパイに置き換え
       let capturedBody: any;
-      openaiMock.customizeMock((url, options) => {
+      openaiMock.customizeMock((url: string, options: { body: string }) => {
         // リクエストボディをキャプチャ
         capturedBody = JSON.parse(options.body);
 
@@ -115,7 +115,7 @@ describe('LLMAdapter', () => {
     it('言語パラメータが指定されていない場合、デフォルト言語（ja）が使用されること', async () => {
       // モックの実装をスパイに置き換え
       let capturedBody: any;
-      openaiMock.customizeMock((url, options) => {
+      openaiMock.customizeMock((url: string, options: { body: string }) => {
         // リクエストボディをキャプチャ
         capturedBody = JSON.parse(options.body);
 

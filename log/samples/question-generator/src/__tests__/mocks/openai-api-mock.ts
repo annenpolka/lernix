@@ -2,7 +2,7 @@
  * OpenAI API モック実装
  */
 import { vi } from 'vitest';
-import { createMockOpenAIResponse } from './openai-mock-data';
+import { createMockOpenAIResponse } from './openai-mock-data.js';
 
 /**
  * OpenAI APIのフェッチモックをセットアップする

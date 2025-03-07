@@ -14,8 +14,8 @@ const mockRequest: GenerationRequest = {
 
 describe('QuestionGenerationService', () => {
   // モックの準備
-  let mockLLMService;
-  let mockCache;
+  let mockLLMService: ReturnType<typeof createMockLLMAdapter>;
+  let mockCache: ReturnType<typeof createMockCacheManager>;
 
   beforeEach(() => {
     // テスト毎にモックをリセット
